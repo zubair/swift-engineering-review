@@ -1,0 +1,92 @@
+{
+  "skill_name": "swift-engineering-review",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Review this Swift file for concurrency issues — it uses Task {} to update a shared dictionary from multiple places.",
+      "expected_output": "Identifies data race on shared mutable state, suggests actor or Mutex, rates as critical severity.",
+      "assertions": [
+        "Finding mentions data race or shared mutable state",
+        "Severity is rated critical",
+        "Suggests actor, Mutex, or synchronization mechanism as fix",
+        "Output follows the skill finding format: severity, file, issue, fix"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Can you check this PR? It's a SwiftUI view that's about 200 lines with lots of inline logic in the body.",
+      "expected_output": "Flags the view body as too large, suggests extracting subviews, rates as minor or major.",
+      "assertions": [
+        "Identifies view body as too long",
+        "Suggests extracting subviews or helper methods",
+        "Severity is minor or major, not critical"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Look at my Swift networking layer and tell me if the error handling is solid.",
+      "expected_output": "Reviews catch blocks, error types, and error propagation patterns.",
+      "assertions": [
+        "Checks for bare catch {} blocks",
+        "Evaluates whether errors are typed and domain-specific",
+        "Reviews try? usage for intentional error suppression",
+        "Findings include concrete fix suggestions"
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "I'm worried about thread safety in my Swift app. Can you take a look at the data layer?",
+      "expected_output": "Reviews actor isolation, Sendable conformance, and shared state protection.",
+      "assertions": [
+        "Identifies shared mutable state patterns",
+        "Checks @Sendable and Sendable conformance",
+        "Reviews @MainActor usage for appropriateness",
+        "Checks for @unchecked Sendable with missing justification"
+      ]
+    },
+    {
+      "id": 5,
+      "prompt": "Review this Swift code for style and naming issues. It's a utility file with some helper functions.",
+      "expected_output": "Checks naming conventions, access control, code organization, and formatting.",
+      "assertions": [
+        "Evaluates naming against Swift API Design Guidelines",
+        "Checks access control levels",
+        "Flags any unused code or missing MARK sections",
+        "Severity ratings are minor or nit for style issues"
+      ]
+    },
+    {
+      "id": 6,
+      "prompt": "This class uses force-unwraps in several places and has some try! calls. Is that OK?",
+      "expected_output": "Flags force-unwraps and force-try as risks, suggests safer alternatives.",
+      "assertions": [
+        "Identifies force-unwraps as a crash risk",
+        "Identifies force-try as a crash risk",
+        "Suggests guard let, optional binding, or throwing alternatives",
+        "Rates force-unwraps in production paths as major or critical"
+      ]
+    },
+    {
+      "id": 7,
+      "prompt": "Review the test coverage for this Swift module. Are we testing the right things?",
+      "expected_output": "Evaluates test strategy, test pyramid, determinism, and behavior-driven testing.",
+      "assertions": [
+        "Checks whether tests cover happy path and edge cases",
+        "Evaluates if tests test behavior vs implementation details",
+        "Checks for Swift Testing framework usage in new tests",
+        "Reviews test determinism and dependency injection"
+      ]
+    },
+    {
+      "id": 8,
+      "prompt": "I have a class with some closures that might be causing memory leaks. Can you check?",
+      "expected_output": "Reviews closure capture lists, weak/unowned usage, and potential retain cycles.",
+      "assertions": [
+        "Identifies closures missing [weak self] where needed",
+        "Checks for retain cycles between delegates and closures",
+        "Evaluates unowned usage for lifetime safety",
+        "Provides concrete fix with capture list example"
+      ]
+    }
+  ]
+}
