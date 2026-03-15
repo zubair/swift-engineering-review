@@ -11,7 +11,8 @@
         "Finding mentions a data race or shared mutable state",
         "Severity is blocker or major, preferably blocker",
         "Suggests actor, Mutex, or another explicit synchronization mechanism",
-        "Includes a remediation playbook or fix path"
+        "Includes a remediation playbook or fix path",
+        "Findings include Confidence and Evidence fields"
       ]
     },
     {
@@ -52,13 +53,14 @@
     {
       "id": 5,
       "prompt": "Review this Swift code for style and naming issues. It's a utility file with some helper functions.",
-      "expected_output": "Produces a lighter-weight review focused on naming, access control, organization, and formatting without inventing high-severity risks.",
+      "expected_output": "Produces a lighter-weight review focused on naming, access control, organization, and formatting without inventing high-severity risks. Caps findings at minor for style-only scope.",
       "assertions": [
         "Output includes `## Review Scorecard`",
         "Uses minor or nit severities for style-only findings",
         "Evaluates naming against Swift API Design Guidelines",
         "Checks access control or code organization",
-        "Avoids fabricating blocker findings when the prompt is style-only"
+        "Avoids fabricating blocker findings when the prompt is style-only",
+        "No finding exceeds minor severity for a style-only review"
       ]
     },
     {

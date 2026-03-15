@@ -42,6 +42,50 @@ Do not use this skill for:
 - Report PASS/WARN/FAIL for relevant tracks even when there are no findings.
 - Avoid repeating reference text verbatim; use the references to drive judgment.
 
+### Evidence Discipline
+
+Every finding must be classified by evidence level:
+
+- **observed** — the defect is directly visible in the reviewed code (e.g. bare `catch {}`,
+  `@unchecked Sendable` on a class with mutable stored properties).
+- **inferred** — the risk is likely based on visible patterns but depends on unseen code
+  (e.g. a `Task {}` probably outlives its owner, but the full lifecycle is not visible).
+- **needs-confirmation** — the finding is a hypothesis that requires checking additional
+  files, runtime behavior, or team context before acting on it.
+
+Rules:
+
+- Only `observed` findings can be rated `blocker`.
+- `inferred` findings cap at `major` unless corroborating evidence raises confidence.
+- `needs-confirmation` findings cap at `minor` and must state what needs checking.
+- Do not assert runtime behavior that cannot be supported by the visible code.
+- Do not claim line-level certainty when the full file or PR context is unavailable.
+- When reviewing a snippet rather than a complete file, state this limitation in the
+  Overall Verdict and downgrade confidence accordingly.
+- Ask for missing files only when a finding depends on unseen definitions — do not
+  speculatively request context.
+
+### Patch Suggestion Policy
+
+When suggesting code changes:
+
+- Prefer minimally invasive fixes that address the finding without restructuring
+  surrounding code.
+- Structural refactors are appropriate only when the finding is `major` or `blocker` and
+  the fix cannot be isolated.
+- Do not introduce new abstractions, protocols, or indirection unless the finding
+  specifically calls for it.
+- Style-only findings (`nit`, `minor`) should suggest the smallest edit that resolves the
+  issue — not a rewrite of the surrounding function.
+
+### False-Positive Controls
+
+- Style-only reviews (naming, formatting, organization) must not produce `blocker` or
+  `major` findings unless a correctness or performance issue is genuinely present.
+- If the review scope is explicitly style-only, cap all findings at `minor`.
+- Do not invent concurrency or correctness risks to justify a higher severity when the
+  actual issue is cosmetic.
+
 ## Triage Workflow
 
 1. Identify the review unit: single file, PR, module, or architecture discussion.
@@ -87,6 +131,23 @@ Do not use this skill for:
 Use the highest defensible severity. Do not inflate style findings to hide the absence
 of real risk.
 
+## Review Modes
+
+The skill defaults to a **full review**. When the user specifies a narrower scope, route
+into the matching mode to avoid loading unnecessary tracks.
+
+| Mode | Trigger | Tracks loaded | Severity cap |
+|---|---|---|---|
+| Full review | "review this PR", "check my code", generic request | All matching tracks | No cap |
+| Concurrency audit | "thread safety", "data race", "concurrency audit", "actor isolation" | Concurrency + Correctness | No cap |
+| SwiftUI review | "SwiftUI review", "state management", "view performance" | SwiftUI & Performance + Correctness | No cap |
+| Architecture review | "architecture review", "API design", "dependency review" | Architecture & API Design + Correctness | No cap |
+| Test review | "test review", "test coverage", "test strategy" | Testing & Tooling | No cap |
+| Style review | "style review", "naming review", "formatting check" | Correctness (style subset) | `minor` |
+
+When in a narrowed mode, still flag `blocker` correctness issues if encountered — they
+are never silenced by mode selection.
+
 ## Output Contract
 
 Use this exact section order:
@@ -105,6 +166,8 @@ Use this exact section order:
 ### [blocker|major|minor|nit] Short summary
 
 **File:** `path/to/File.swift:line`
+**Confidence:** high | medium | low
+**Evidence:** observed | inferred | needs-confirmation
 **Why it matters:** Concrete risk and user impact.
 **Fix:** Concrete code or design change.
 **Playbook:** One label from `references/remediation-playbooks.md` when a reusable fix
@@ -118,6 +181,22 @@ path applies.
 ## Overall Verdict
 1-3 sentences on readiness, highest-risk area, and next step.
 ```
+
+### Confidence Levels
+
+- **high** — the defect is visible in the code with no ambiguity; the fix is clear.
+- **medium** — the pattern strongly suggests a problem, but full confirmation requires
+  additional context (e.g. checking a caller, a test, or a deployment target).
+- **low** — the finding is a plausible risk based on heuristics, but the reviewer cannot
+  confirm it from the available code. Always pair with `needs-confirmation` evidence.
+
+### Confidence–Severity Matrix
+
+| Evidence | Max severity | Confidence |
+|---|---|---|
+| observed | blocker | high |
+| inferred | major | medium or high |
+| needs-confirmation | minor | low |
 
 If a track is not relevant, mark it `N/A`. If there are no findings in a relevant
 track, leave the track as `PASS` and say so briefly in the verdict.

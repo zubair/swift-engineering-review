@@ -230,13 +230,21 @@ present, even if the user only asked for a generic review.
 
 ## Scorecard Rules
 
-- `PASS`: No meaningful issues in the track, or only one low-value nit.
-- `WARN`: One or more minor issues, or a design smell that deserves follow-up.
-- `FAIL`: Any blocker or major issue, or repeated minor issues that expose a broken
-  pattern.
-- `N/A`: The track is genuinely out of scope for the reviewed code.
+| Grade | Criteria | Examples |
+|---|---|---|
+| `PASS` | No meaningful issues, or only one low-value nit | Clean concurrency with correct isolation; well-structured SwiftUI state |
+| `WARN` | One or more minor issues, or a design smell that deserves follow-up but does not block merge | Missing cancellation handling in a non-critical path; oversized `body` without correctness risk |
+| `FAIL` | Any blocker or major issue, or 3+ minor issues that expose a broken pattern | Data race on shared state; mixed observation causing double-invalidation; no tests for public API with side effects |
+| `N/A` | The track is genuinely out of scope for the reviewed code | No concurrency in a pure formatting utility; no SwiftUI in a CLI tool |
 
 The scorecard is not a summary of how much code was touched. It is a risk signal.
+
+Escalation rules:
+- A single `blocker` in any track → that track is `FAIL`.
+- A single `major` in any track → that track is `FAIL`.
+- 3+ `minor` issues in the same track → escalate to `WARN` at minimum; `FAIL` if they
+  expose a systemic pattern.
+- `nit`-only tracks remain `PASS` regardless of count.
 
 ## Track Questions
 
@@ -269,6 +277,13 @@ The scorecard is not a summary of how much code was touched. It is a risk signal
 - Does the abstraction reduce coupling, or just add indirection?
 - Are access control and module boundaries as narrow as possible?
 - Will this pattern scale if repeated in three more features?
+- Is the dependency direction correct (lower modules do not import higher modules)?
+- Are feature boundaries clean (no cross-feature concrete type references)?
+- Are protocol abstractions justified by multiple implementations or proven test pressure?
+- Is state ownership clear (who creates, holds, and mutates each shared model)?
+- Is navigation composition centralized or scattered across feature modules?
+- Are async boundaries placed at the right layer (not leaking into views or pure models)?
+- Do test seams exist for every external dependency (network, storage, time, randomness)?
 
 ### Ownership & Memory
 

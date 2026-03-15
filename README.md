@@ -54,7 +54,7 @@ Then use the skill in your AI agent, for example:
 
 - **Correctness**: Force-unwraps, force-try, optional safety, exhaustive switches, compile warnings
 - **Concurrency Safety**: Data races, actor isolation, Sendable correctness, structured concurrency, MainActor usage, cancellation handling, `Mutex` usage, `sending` parameters, `@isolated(any)`, `nonisolated(unsafe)` auditing
-- **SwiftUI & State**: State ownership, identity stability, view composition, observable migration (`ObservableObject` → `@Observable`), invalidation pressure
+- **SwiftUI & State**: State ownership, identity stability, view composition, observable migration (`ObservableObject` → `@Observable`), invalidation pressure, `@Observable` ownership boundaries, environment overreach, task lifecycle churn
 - **API Design & Naming**: Swift API Design Guidelines, argument labels, access control, generics naming
 - **Code Organization**: Extensions, protocol conformance structure, MARK sections, unused code removal, minimal imports
 - **Memory Management**: Capture lists, retain cycles, weak/unowned semantics, IBOutlet conventions
@@ -72,6 +72,30 @@ Then use the skill in your AI agent, for example:
 | **major** | Incorrect behavior, significant performance issue, or API misuse |
 | **minor** | Style violation, suboptimal pattern, or maintainability concern |
 | **nit** | Cosmetic preference or trivial improvement |
+
+### Evidence Discipline
+
+Every finding includes structured confidence and evidence metadata:
+
+| Field | Values | Purpose |
+|---|---|---|
+| **Confidence** | high, medium, low | How certain the reviewer is that the issue exists |
+| **Evidence** | observed, inferred, needs-confirmation | Whether the defect is directly visible, pattern-based, or hypothetical |
+
+This prevents the skill from overstating risks. Only `observed` defects can be rated `blocker`. `needs-confirmation` findings cap at `minor` and state what needs checking.
+
+### Review Modes
+
+The skill supports focused review modes for narrower scopes:
+
+| Mode | Example triggers |
+|---|---|
+| Full review | "review this PR", "check my code" |
+| Concurrency audit | "thread safety", "data race check" |
+| SwiftUI review | "SwiftUI review", "state management" |
+| Architecture review | "architecture review", "API design" |
+| Test review | "test coverage", "test strategy" |
+| Style review | "naming review", "formatting check" (caps findings at `minor`) |
 
 ### Remediation Playbooks
 

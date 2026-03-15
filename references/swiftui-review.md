@@ -29,12 +29,34 @@ Instruments profiling guide.
 - Avoid using collection indices as identity when the collection is mutable.
 - Avoid side effects in computed view properties or modifiers that run on every render.
 
+## Environment and Dependency Smells
+
+- Avoid passing deeply nested data through `@Environment` when a direct injection or
+  `@Bindable` property is clearer — environment overreach makes dependencies invisible.
+- Flag `@Environment(\.dismiss)` or `@Environment(\.openURL)` used outside the view that
+  logically owns the action.
+- Avoid storing `@Observable` models in `@Environment` when they are used by only one
+  subtree — prefer direct injection to reduce observation scope.
+
+## @Observable Ownership Boundaries
+
+- The view that creates an `@Observable` model with `@State` owns its lifetime.
+- Child views should receive the model as a plain property (not `@State`) — re-wrapping
+  in `@State` creates a second source of truth.
+- Use `@Bindable` in child views only when the child needs write access via `$binding`.
+- When a model crosses a navigation boundary (sheet, NavigationLink), decide explicitly
+  whether it is passed by reference (shared mutation) or copied (independent state).
+
 ## Async Lifecycle
 
 - Prefer `.task(id:)` when async work should follow view identity.
 - Avoid fire-and-forget `Task {}` from views when the model should own the work.
 - Guard against stale writes when user input changes while a task is in flight.
 - Tie cancellation to lifecycle where possible.
+- Flag accidental task duplication from view lifecycle churn — if a parent view
+  invalidates frequently, child `.task` modifiers may re-fire and duplicate work.
+- When `@MainActor` isolation leaks from a view into a model that does not need it,
+  flag the unnecessary serialization.
 
 ## Severity Guidance
 
