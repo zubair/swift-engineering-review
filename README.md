@@ -53,7 +53,8 @@ Then use the skill in your AI agent, for example:
 ### Review Areas
 
 - **Correctness**: Force-unwraps, force-try, optional safety, exhaustive switches, compile warnings
-- **Concurrency Safety**: Data races, actor isolation, Sendable correctness, structured concurrency, MainActor usage, cancellation handling
+- **Concurrency Safety**: Data races, actor isolation, Sendable correctness, structured concurrency, MainActor usage, cancellation handling, `Mutex` usage, `sending` parameters, `@isolated(any)`, `nonisolated(unsafe)` auditing
+- **SwiftUI & State**: State ownership, identity stability, view composition, observable migration (`ObservableObject` → `@Observable`), invalidation pressure
 - **API Design & Naming**: Swift API Design Guidelines, argument labels, access control, generics naming
 - **Code Organization**: Extensions, protocol conformance structure, MARK sections, unused code removal, minimal imports
 - **Memory Management**: Capture lists, retain cycles, weak/unowned semantics, IBOutlet conventions
@@ -67,10 +68,34 @@ Then use the skill in your AI agent, for example:
 
 | Level | Meaning |
 |---|---|
-| **critical** | Will crash, corrupt data, cause a data race, or create a security hole |
+| **blocker** | Will crash, corrupt data, cause a data race, or create a security hole |
 | **major** | Incorrect behavior, significant performance issue, or API misuse |
 | **minor** | Style violation, suboptimal pattern, or maintainability concern |
 | **nit** | Cosmetic preference or trivial improvement |
+
+### Remediation Playbooks
+
+Every finding links to a remediation playbook — a structured fix pattern with detection signals, before/after code examples, and risk notes. The skill includes 13 playbooks organized by domain:
+
+**Concurrency** — `actor isolation`, `mutex usage`, `sending parameters`, `@isolated(any)`, `nonisolated(unsafe)`, `task lifetime`
+
+**SwiftUI & State** — `state ownership`, `identity stability`, `observable migration`
+
+**General** — `retain-cycle removal`, `typed errors`, `dependency injection`, `test hardening`
+
+### Finding Confidence Scoring
+
+When a file contains signals for multiple playbooks, the routing layer uses signal weights to determine the primary finding. Each detected pattern adds a weight to the matching playbook's score. The highest-scoring playbook becomes the primary finding, preventing over-triggering when signals overlap.
+
+### Cross-File Reasoning
+
+For PR-level and module-level reviews, the skill applies cross-file checks that single-file analysis would miss:
+
+- Shared mutable state accessed across actor boundaries in different files
+- Global mutable state (`nonisolated(unsafe) var`) referenced from multiple files
+- Cross-module dependency inversion (lower module importing higher module)
+- Mixed observation patterns (`ObservableObject` + `@Observable`) across a view hierarchy
+- Non-`Sendable` models passed across isolation boundaries between files
 
 ### Tooling Scripts
 
@@ -80,6 +105,28 @@ The `scripts/` directory provides helper scripts for automated checks:
 - `format_swift.sh` — Run the official Swift formatter
 - `lint_swift.sh` — Run SwiftLint in strict mode
 - `fix_and_lint.sh` — Format, auto-fix, then lint
+
+## Output Stability Testing
+
+The `tests/` directory contains golden test fixtures for verifying the skill produces consistent, correct output across model updates.
+
+Each fixture is a Swift file with known issues paired with an expected output file that defines structural assertions — which playbooks should fire, at what severity, and what must not happen.
+
+| Fixture | Tests |
+|---|---|
+| `concurrency_data_race.swift` | `@unchecked Sendable` race → `actor isolation` (blocker) |
+| `swiftui_observable_migration.swift` | Legacy `ObservableObject` → `observable migration` (nit) |
+| `mixed_observation.swift` | Mixed old/new observation → `observable migration` (major) |
+| `retain_cycle_delegate.swift` | Strong delegate + closure → `retain-cycle removal` (major) |
+| `nonisolated_unsafe_globals.swift` | Mutable unsafe globals → `nonisolated(unsafe)` (blocker) |
+
+Run the golden tests:
+
+```bash
+./tests/run_golden_tests.sh
+```
+
+See [`tests/README.md`](tests/README.md) for details on adding new fixtures.
 
 ## Baseline Stack
 
@@ -123,16 +170,36 @@ swift-engineering-review/
 ├── SKILL.md                            # Entry point and review workflow
 ├── agents/
 │   └── openai.yaml                     # Public-facing display metadata
+├── evals/
+│   └── evals.json                      # Evaluation assertions (14 evals)
 ├── references/
+│   ├── review-routing.md               # Track selection, confidence scoring, cross-file reasoning
 │   ├── review-checklist.md             # Structured review checklist
+│   ├── remediation-playbooks.md        # 13 playbooks with examples and risk notes
+│   ├── swiftui-review.md              # SwiftUI heuristics and observable migration
 │   ├── swift-style-guide.md            # Swift 6 style, naming, and formatting criteria
 │   ├── tooling.md                      # swift-format and SwiftLint setup
 │   └── example-findings.md             # Example review output at each severity
-└── scripts/
-    ├── check_prereqs.sh                # Verify tooling availability
-    ├── format_swift.sh                 # Run swift format in-place
-    ├── lint_swift.sh                   # Run SwiftLint --strict
-    └── fix_and_lint.sh                 # Format → auto-fix → strict lint
+├── scripts/
+│   ├── check_prereqs.sh                # Verify tooling availability
+│   ├── format_swift.sh                 # Run swift format in-place
+│   ├── lint_swift.sh                   # Run SwiftLint --strict
+│   └── fix_and_lint.sh                 # Format → auto-fix → strict lint
+└── tests/
+    ├── README.md                       # Test infrastructure docs
+    ├── run_golden_tests.sh             # Structural assertion runner
+    ├── fixtures/                       # Swift files with known issues
+    │   ├── concurrency_data_race.swift
+    │   ├── mixed_observation.swift
+    │   ├── nonisolated_unsafe_globals.swift
+    │   ├── retain_cycle_delegate.swift
+    │   └── swiftui_observable_migration.swift
+    └── expected/                       # Structural assertions per fixture
+        ├── concurrency_data_race.md
+        ├── mixed_observation.md
+        ├── nonisolated_unsafe_globals.md
+        ├── retain_cycle_delegate.md
+        └── swiftui_observable_migration.md
 ```
 
 ## Contributing

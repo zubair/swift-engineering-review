@@ -7,13 +7,214 @@ then add tracks only when the code or the request clearly requires them.
 
 | Signal | Track | Load | Focus |
 |---|---|---|---|
-| `async`, `await`, `Task`, `actor`, `Sendable`, `@MainActor`, `AsyncSequence` | Concurrency | This file + `review-checklist.md` Concurrency | Isolation boundaries, task lifetime, cancellation, Sendable correctness |
-| `View`, `body`, `@State`, `@Binding`, `@Observable`, `ForEach`, `.task` | SwiftUI & Performance | This file + `swiftui-review.md` | State ownership, identity stability, invalidation pressure, view lifecycle |
+| `async`, `await`, `Task`, `TaskGroup`, `actor`, `Sendable`, `@MainActor`, `AsyncSequence`, `Mutex`, `sending`, `@isolated(any)`, `nonisolated(unsafe)` | Concurrency | This file + `review-checklist.md` Concurrency | Isolation boundaries, task lifetime, cancellation, Sendable correctness, mutex usage, sending safety |
+| `View`, `body`, `@State`, `@Bindable`, `@Binding`, `@Environment`, `@Observable`, `ForEach`, `.task`, `.sheet`, `ObservableObject`, `@Published`, `@StateObject`, `@ObservedObject` | SwiftUI & Performance | This file + `swiftui-review.md` | State ownership, identity stability, invalidation pressure, view lifecycle, observable migration |
 | Repositories, services, DI, protocols, modules, large PRs | Architecture & API Design | This file + `review-checklist.md` Architecture | Dependency direction, abstraction discipline, module boundaries, access control |
 | `throws`, `Result`, `catch`, retry logic, logging | Error Handling & Observability | `review-checklist.md` Error Handling + `remediation-playbooks.md` | Error typing, propagation, retries, diagnostics |
 | Closures, delegates, reference types | Ownership & Memory | `review-checklist.md` Ownership + `remediation-playbooks.md` | Retain cycles, weak/unowned safety, reference vs value semantics |
 | Tests, CI, formatter, SwiftLint | Testing & Tooling | `review-checklist.md` Tests + `tooling.md` | Risk-driven coverage, determinism, CI enforcement |
 | Naming, imports, organization, comments | Correctness or Architecture & API Design | `swift-style-guide.md` | Clarity, consistency, and code organization |
+
+## Detection Predicates
+
+Use these predicates to route detected signals to the correct remediation playbook.
+
+### Concurrency Predicates
+
+| Signal | Condition | Playbook |
+|---|---|---|
+| `@unchecked Sendable`, shared `var` across tasks, `DispatchQueue` protecting state | Mutable state accessed from multiple isolation domains | `actor isolation` |
+| `DispatchQueue.sync` guarding single property, `os_unfair_lock`, `NSLock` for trivial section | Small synchronous critical section that does not suspend | `mutex usage` |
+| Parameter passed into `Task {}` or across actor boundary, non-`Sendable` value transfer | Value crosses isolation boundary without `sending` | `sending parameters` |
+| `@MainActor () -> Void` closure param, forced actor hop on generic callback | Closure forced to specific actor when caller isolation varies | `@isolated(any)` |
+| `nonisolated(unsafe)` without safety-invariant comment | Escape hatch used without documented rationale | `nonisolated(unsafe)` |
+| `Task {}` without stored handle, no `.cancel()`, fire-and-forget in view | Unstructured task with no owner or cancellation path | `task lifetime` |
+
+### SwiftUI Predicates
+
+| Signal | Condition | Playbook |
+|---|---|---|
+| `@State` holding reference type, model created in `body` | State owned by the wrong layer or duplicated | `state ownership` |
+| `ForEach(indices)`, `UUID()` in `body`, `id: \.self` on mutable collection | Unstable identity causing spurious invalidation | `identity stability` |
+| `ObservableObject`, `@Published`, `@StateObject`, `@ObservedObject`, mixed old/new observation | Legacy observation pattern or mixed-observation double-invalidation | `observable migration` |
+
+### General Predicates
+
+| Signal | Condition | Playbook |
+|---|---|---|
+| Closure on `self` without `[weak self]`, strong `var delegate` | Closure or delegate retains owner beyond its lifetime | `retain-cycle removal` |
+| Bare `catch {}`, `try?` discarding error, string-based error messages | Error information lost or swallowed | `typed errors` |
+| `.shared` singleton, `init()` creating own dependencies | Hidden coupling preventing testing and evolution | `dependency injection` |
+| No test for public type, happy-path-only test suite | Risky behavior lacks regression coverage | `test hardening` |
+
+## Finding Confidence Scoring
+
+When a file contains signals for multiple playbooks, use signal weights to determine the
+primary finding. This prevents over-triggering and ensures the most relevant playbook is
+recommended first.
+
+### How It Works
+
+1. For each detected signal in the file, add the weight to the matching playbook's score.
+2. The playbook with the highest score becomes the **primary finding**.
+3. Secondary playbooks (score ≥ 3) may be mentioned as additional recommendations.
+4. Playbooks scoring below 3 should not generate standalone findings — fold them into the
+   primary finding's fix guidance if relevant.
+
+### Signal Weights
+
+#### Observable Migration
+
+| Signal | Weight |
+|---|---|
+| `ObservableObject` conformance | +3 |
+| `@Published` property | +2 |
+| `@StateObject` usage | +2 |
+| `@ObservedObject` usage | +2 |
+| `objectWillChange.send()` | +2 |
+| Mixed `ObservableObject` + `@Observable` in same hierarchy | +4 (and escalate to `major`) |
+
+#### Actor Isolation
+
+| Signal | Weight |
+|---|---|
+| `@unchecked Sendable` on class with mutable state | +4 |
+| Shared `var` mutated inside `Task {}` | +3 |
+| `DispatchQueue` used solely for property synchronization | +2 |
+| Non-sendable type crossing isolation boundary | +2 |
+
+#### Task Lifetime
+
+| Signal | Weight |
+|---|---|
+| `Task {}` inside `body` or `onAppear` without `.task` | +4 |
+| `Task {}` with no stored handle or `.cancel()` | +3 |
+| Fire-and-forget writing back to `@State` | +3 |
+
+#### State Ownership
+
+| Signal | Weight |
+|---|---|
+| `@State` holding a reference type | +4 |
+| Model created inside `body` | +3 |
+| Multiple views holding `@State` for same data | +2 |
+
+#### Identity Stability
+
+| Signal | Weight |
+|---|---|
+| `ForEach(indices, id: \.self)` on mutable collection | +4 |
+| `UUID()` in `body` or computed property | +3 |
+| `id: \.self` on non-`Identifiable` duplicable values | +2 |
+
+#### Mutex Usage
+
+| Signal | Weight |
+|---|---|
+| `DispatchQueue.sync` guarding single property | +3 |
+| `os_unfair_lock` or `NSLock` for trivial section | +3 |
+| Synchronous-only critical section (no `await` inside) | +2 |
+
+#### Retain-Cycle Removal
+
+| Signal | Weight |
+|---|---|
+| Closure capturing `self` without `[weak self]`, closure outlives owner | +4 |
+| Strong `var delegate` | +3 |
+| `Timer` or `NotificationCenter` observer without weak reference | +2 |
+
+#### Typed Errors
+
+| Signal | Weight |
+|---|---|
+| Bare `catch {}` | +4 |
+| `try?` discarding diagnostic error | +3 |
+| String-based error messages instead of typed enum | +2 |
+
+### Scoring Example
+
+A file containing a SwiftUI `View` with `@StateObject`, `@Published` model,
+`Task {}` in `onAppear`, and `ForEach(indices, id: \.self)`:
+
+```
+observable migration:  @StateObject(+2) + @Published(+2) = 4  ← secondary
+task lifetime:         Task{} in onAppear(+4) = 4             ← tied primary
+identity stability:    ForEach indices(+4) = 4                 ← tied primary
+state ownership:       (no direct signals) = 0
+```
+
+When scores tie, prefer the higher-severity finding (blocker > major > minor). If
+severity also ties, lead with the concurrency finding — data races are harder to debug
+than UI issues.
+
+## Cross-File Reasoning
+
+Single-file analysis misses module-level and architecture-level issues. When the review
+scope is a PR, module, or repo, apply these cross-file checks in addition to per-file
+analysis.
+
+### When to Apply
+
+- PR spans 3+ files across different layers (view, model, service, network)
+- Review scope is explicitly a module, package, or architecture review
+- Per-file analysis produces repeated similar findings across files (systemic pattern)
+
+### Cross-File Checks
+
+#### Shared Mutable State Across Actors
+
+- **What to look for:** A model or service defined in one file is mutated from actor-isolated
+  code in another file without going through the actor's isolation boundary.
+- **Detection:** `actor` defined in file A; direct property access (not `await`) on that
+  actor's state from file B. Or: class marked `@unchecked Sendable` in file A, mutated
+  from `Task {}` in file B.
+- **Playbook:** `actor isolation`
+
+#### Global Mutable State
+
+- **What to look for:** `var` at module scope or `static var` on a type, accessed from
+  multiple files without synchronization.
+- **Detection:** `nonisolated(unsafe) var` or unprotected `static var` referenced in 2+
+  files.
+- **Playbook:** `nonisolated(unsafe)` or `actor isolation`
+
+#### Cross-Module Dependency Inversion
+
+- **What to look for:** A lower-level module imports and depends on a higher-level module,
+  or concrete types from one feature module are used directly in another.
+- **Detection:** `import FeatureX` in a shared/core module; concrete type from module A
+  used as a parameter in module B's public API without a protocol boundary.
+- **Playbook:** `dependency injection`
+
+#### Observation Consistency Across View Hierarchy
+
+- **What to look for:** Parent view uses `@Observable` while child view still uses
+  `@ObservedObject` or `@EnvironmentObject`, causing mixed observation and
+  double-invalidation.
+- **Detection:** `@Observable` in model file A; `@ObservedObject` or `@StateObject` in
+  view file B referencing the same model type.
+- **Playbook:** `observable migration` (escalate to `major`)
+
+#### Shared Model Without Sendable Safety
+
+- **What to look for:** A model type used across actor boundaries (e.g. passed from a
+  background service to a `@MainActor` view model) without `Sendable` conformance or
+  `sending` annotation.
+- **Detection:** Type defined in file A without `Sendable`; passed across `await` boundary
+  in file B.
+- **Playbook:** `sending parameters` or `actor isolation`
+
+### Reporting Cross-File Findings
+
+Cross-file findings use the same output format as per-file findings, but the `File:` field
+lists all relevant files:
+
+```markdown
+**File:** `Services/CacheActor.swift:12`, `ViewModels/ProfileVM.swift:45`
+```
+
+Cross-file findings are inherently higher risk. Default to `major` severity unless the
+pattern is clearly a `nit`.
 
 ## Mandatory Escalation Rules
 
@@ -51,6 +252,9 @@ The scorecard is not a summary of how much code was touched. It is a risk signal
 - Is actor isolation explicit and narrow?
 - Do tasks have a parent, cancellation story, and safe lifetime?
 - Is `Sendable` true, or merely asserted?
+- Is `Mutex` held only for synchronous sections (never across `await`)?
+- Is `sending` used at isolation boundaries where values transfer ownership?
+- Does every `nonisolated(unsafe)` have a documented safety invariant?
 
 ### SwiftUI & Performance
 

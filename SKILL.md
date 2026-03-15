@@ -47,10 +47,12 @@ Do not use this skill for:
 1. Identify the review unit: single file, PR, module, or architecture discussion.
 2. Scan for signals and load only the matching references:
    - SwiftUI signals: `View`, `body`, `@State`, `@Bindable`, `@Environment`,
-     `@Observable`, `ForEach`, `.task`, `.sheet`
+     `@Observable`, `ForEach`, `.task`, `.sheet`, `ObservableObject`, `@Published`,
+     `@StateObject`, `@ObservedObject`
      - Load `references/swiftui-review.md` and `references/review-routing.md`.
    - Concurrency signals: `async`, `await`, `Task`, `TaskGroup`, `actor`, `Sendable`,
-     `Mutex`, `@MainActor`, `nonisolated`, `AsyncSequence`
+     `Mutex`, `@MainActor`, `nonisolated`, `AsyncSequence`, `sending`,
+     `@isolated(any)`, `nonisolated(unsafe)`
      - Load `references/review-routing.md` and the Concurrency section of
        `references/review-checklist.md`.
    - Architecture signals: many touched directories, DI, repositories, services,

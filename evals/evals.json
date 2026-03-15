@@ -107,6 +107,76 @@
         "Looks for dependency direction, abstraction quality, or module-boundary issues",
         "Includes both quick wins and structural fixes in the remediation plan"
       ]
+    },
+    {
+      "id": 10,
+      "fixture": "tests/fixtures/concurrency_data_race.swift",
+      "prompt": "Review this Swift file for engineering issues: tests/fixtures/concurrency_data_race.swift",
+      "expected_output": "Fails Concurrency track with blocker for @unchecked Sendable data race, major for unstructured task lifetime.",
+      "assertions": [
+        "Concurrency track is FAIL",
+        "References playbook `actor isolation`",
+        "Finding severity is blocker for the shared mutable state issue",
+        "References playbook `task lifetime`",
+        "Mentions `@unchecked Sendable` as a false safety assertion",
+        "Suggests converting to actor or using Mutex"
+      ]
+    },
+    {
+      "id": 11,
+      "fixture": "tests/fixtures/swiftui_observable_migration.swift",
+      "prompt": "Review this Swift file for engineering issues: tests/fixtures/swiftui_observable_migration.swift",
+      "expected_output": "Flags observable migration as nit and task lifetime as major. Does not overstate ObservableObject usage.",
+      "assertions": [
+        "SwiftUI & Performance track is WARN or FAIL",
+        "References playbook `observable migration`",
+        "Observable migration finding is nit severity (not major — no mixed observation)",
+        "References playbook `task lifetime`",
+        "Task lifetime finding is major severity",
+        "Suggests .task modifier instead of Task {} in onAppear"
+      ]
+    },
+    {
+      "id": 12,
+      "fixture": "tests/fixtures/mixed_observation.swift",
+      "prompt": "Review this Swift file for engineering issues: tests/fixtures/mixed_observation.swift",
+      "expected_output": "Flags mixed ObservableObject + @Observable as major due to double-invalidation. Not a nit.",
+      "assertions": [
+        "SwiftUI & Performance track is FAIL",
+        "References playbook `observable migration`",
+        "Observable migration finding is major severity",
+        "Mentions double-invalidation or redundant view updates",
+        "Identifies both ObservableObject and @Observable in same hierarchy",
+        "Suggests migrating UserSettings to @Observable"
+      ]
+    },
+    {
+      "id": 13,
+      "fixture": "tests/fixtures/retain_cycle_delegate.swift",
+      "prompt": "Review this Swift file for engineering issues: tests/fixtures/retain_cycle_delegate.swift",
+      "expected_output": "Fails Ownership track for strong delegate and closure capture. Warns on error handling.",
+      "assertions": [
+        "Ownership & Memory track is FAIL",
+        "References playbook `retain-cycle removal`",
+        "Identifies strong delegate as a retain cycle",
+        "Identifies closure capturing self without [weak self]",
+        "References playbook `typed errors`",
+        "Error handling finding mentions swallowed error or try?"
+      ]
+    },
+    {
+      "id": 14,
+      "fixture": "tests/fixtures/nonisolated_unsafe_globals.swift",
+      "prompt": "Review this Swift file for engineering issues: tests/fixtures/nonisolated_unsafe_globals.swift",
+      "expected_output": "Fails Concurrency for mutable nonisolated(unsafe) globals. Distinguishes safe immutable let from unsafe mutable var.",
+      "assertions": [
+        "Concurrency track is FAIL",
+        "References playbook `nonisolated(unsafe)` or `actor isolation`",
+        "Identifies featureFlags as a data race risk",
+        "Identifies AppConfig.apiBaseURL as a data race risk",
+        "Distinguishes immutable logger (nit) from mutable globals (major/blocker)",
+        "Suggests Mutex, actor, or making state immutable"
+      ]
     }
   ]
 }

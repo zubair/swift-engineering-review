@@ -29,6 +29,10 @@
 - [ ] Global actors are not used as a lazy synchronization mechanism — serializes unrelated work and masks missing isolation design
 - [ ] Isolation boundaries are narrow and well-documented
 - [ ] `async`/`await` preferred over callback-based APIs
+- [ ] `Mutex` is used only for small synchronous critical sections — do not hold across `await`; prefer `actor` for complex state
+- [ ] `sending` parameters are used when values cross isolation boundaries — prevents accidental shared-mutable-state transfer
+- [ ] `@isolated(any)` is used for closure parameters that should inherit caller isolation — avoids forcing unnecessary actor hops
+- [ ] `nonisolated(unsafe)` has an inline comment documenting the safety invariant — escape hatch that silently reintroduces data races if the invariant changes
 
 ## Architecture
 

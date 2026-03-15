@@ -53,3 +53,44 @@ true concurrency bug.
 - Move async orchestration into a `@MainActor` model.
 - Replace index-based identity with stable model identity.
 - Convert one giant screen model into smaller feature-scoped state holders.
+
+## Observable Migration
+
+Use this section when code contains `ObservableObject`, `@Published`, `@StateObject`,
+`@ObservedObject`, or `objectWillChange.send()`.
+
+### Detection Signals
+
+- `ObservableObject` conformance on a model class
+- `@Published` property wrappers on stored properties
+- `@StateObject` or `@ObservedObject` in view declarations
+- `@EnvironmentObject` in view declarations
+- Manual `objectWillChange.send()` calls
+- Mixed `ObservableObject` and `@Observable` types in the same view hierarchy
+
+### Migration Steps
+
+1. Remove `ObservableObject` conformance and add `@Observable` macro to the class.
+2. Remove `@Published` from all stored properties — `@Observable` tracks mutations
+   automatically via property access.
+3. Replace property wrappers: `@StateObject` → `@State`, `@ObservedObject` → direct
+   property or `@Bindable` (prefer `@Bindable` when the view needs write access via
+   `$binding`), `@EnvironmentObject` → `@Environment`.
+4. Use `@Bindable` when you need a `Binding` from a non-`@State` observable property —
+   this is the standard replacement for `@ObservedObject` when bindings are used.
+5. Remove `objectWillChange.send()` calls — no longer needed.
+
+### Severity Guidance
+
+- `nit`: still using `ObservableObject` pattern — Xcode flags this directly, so the
+  compiler is already guiding the developer. Do not nag about what the toolchain surfaces.
+- `major`: mixed `ObservableObject` and `@Observable` in the same view hierarchy causing
+  double-invalidation — this is a real bug the compiler will not catch.
+
+### Risk Notes
+
+- `@Observable` requires iOS 17+ / macOS 14+. Verify deployment target before migrating.
+- Mixing old (`ObservableObject`) and new (`@Observable`) observation in the same view
+  hierarchy causes double-invalidation: both the old `objectWillChange` publisher and the
+  new observation tracking fire, leading to redundant view updates.
+- Migrate entire model chains together to avoid the mixed-observation problem.
