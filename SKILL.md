@@ -2,128 +2,145 @@
 name: swift-engineering-review
 description: >
   Use this skill to review Swift code, pull requests, or architecture decisions against
-  modern Swift 6 engineering standards — even when the user asks generically to "review
-  my code" or "check this PR" and the target is a Swift project. Covers correctness,
-  concurrency safety (Sendable, actor isolation, data races), API design, memory
-  management, error handling, testing, and style enforcement with swift-format and
-  SwiftLint. Also trigger when the user asks about thread safety, data races, or Swift
-  concurrency correctness in their codebase. This skill does not cover accessibility
-  auditing, performance profiling, or migration between Swift versions.
+  modern Swift 6 engineering standards. Trigger even when the user asks generically to
+  "review this PR" or "check my code" and the target is Swift. Handles correctness,
+  Swift 6 concurrency, SwiftUI state and lightweight performance heuristics, API design,
+  memory management, error handling, testing, and CI/tooling. Also use for thread
+  safety, actor isolation, data races, large Swift PR triage, and patch-ready refactor
+  guidance. Do not use it for accessibility audits, Instruments-based profiling, or
+  cross-version migration planning.
 ---
 
 # Swift Engineering Review
 
-You are a senior Swift engineer performing a structured code review. Produce actionable,
-severity-rated findings with suggested fixes. Reference the files under `references/` for
-detailed criteria — do not repeat their content verbatim.
+Perform a repeatable engineering audit, not a checklist dump. Triage the change, load
+only the relevant tracks, then produce a deterministic scorecard, severity-ranked
+findings, and concrete remediation steps.
 
-## Baseline Stack
+## Activation
 
-| Component | Baseline |
+Use this skill when:
+
+- reviewing Swift, SwiftUI, UIKit, Package.swift, or Apple-platform code
+- the user asks for code review, PR review, architecture review, thread-safety review,
+  concurrency audit, API review, test review, or SwiftUI state/performance feedback
+- the request is generic but the repo or files clearly indicate Swift
+
+Do not use this skill for:
+
+- accessibility audits
+- benchmark or Instruments profiling
+- migration planning between Swift language versions unless the user is reviewing
+  already-migrated code
+
+## Operating Rules
+
+- Classify the change before loading references.
+- Route to the smallest relevant set of review tracks.
+- Prioritize blocker and major risks over style commentary.
+- Every finding must explain why it matters and how to fix it.
+- Report PASS/WARN/FAIL for relevant tracks even when there are no findings.
+- Avoid repeating reference text verbatim; use the references to drive judgment.
+
+## Triage Workflow
+
+1. Identify the review unit: single file, PR, module, or architecture discussion.
+2. Scan for signals and load only the matching references:
+   - SwiftUI signals: `View`, `body`, `@State`, `@Bindable`, `@Environment`,
+     `@Observable`, `ForEach`, `.task`, `.sheet`
+     - Load `references/swiftui-review.md` and `references/review-routing.md`.
+   - Concurrency signals: `async`, `await`, `Task`, `TaskGroup`, `actor`, `Sendable`,
+     `Mutex`, `@MainActor`, `nonisolated`, `AsyncSequence`
+     - Load `references/review-routing.md` and the Concurrency section of
+       `references/review-checklist.md`.
+   - Architecture signals: many touched directories, DI, repositories, services,
+     protocols, package boundaries, navigation composition, or PRs larger than about
+     500 changed lines
+     - Load `references/review-routing.md` and the Architecture section of
+       `references/review-checklist.md`.
+   - Error-handling or networking signals: `throws`, `Result`, `catch`, retry logic,
+     logging, URLSession, decoding
+     - Load the Error Handling section of `references/review-checklist.md` and
+       `references/remediation-playbooks.md`.
+   - Naming, style, or organization signals
+     - Load `references/swift-style-guide.md`.
+   - Tests, formatter, or CI signals
+     - Load the Tests section of `references/review-checklist.md` and
+       `references/tooling.md`.
+3. Build a scorecard from the relevant tracks only.
+4. Emit findings grouped by severity.
+5. End with a remediation plan split into quick wins, structural fixes, and tests to
+   add.
+6. Re-check every blocker or major finding against the code before finalizing.
+
+## Severity Policy
+
+| Level | Use when |
 |---|---|
-| Swift | 6.x |
-| Xcode | 26+ |
-| iOS SDK | 26 |
-| Concurrency | Swift Structured Concurrency |
-| UI | SwiftUI first; UIKit where required |
-| Persistence | SwiftData or a deliberate alternative |
-| Testing | Swift Testing for new tests; XCTest/XCUITest where required |
+| `blocker` | Data race, crash, corruption, security issue, broken isolation boundary, or guaranteed lifetime bug |
+| `major` | Incorrect behavior, high-risk API misuse, architectural flaw that will spread, or serious SwiftUI state/performance issue |
+| `minor` | Maintainability problem, localized performance smell, missing tests, or suboptimal ownership/design |
+| `nit` | Cosmetic or low-impact polish |
 
-Adjust expectations to the actual project context when it differs from the baseline.
+Use the highest defensible severity. Do not inflate style findings to hide the absence
+of real risk.
 
-## Review Philosophy
+## Output Contract
 
-Reviews should prioritize correctness, concurrency safety, API design, readability,
-architectural fit, test coverage, observability, and performance impact.
+Use this exact section order:
 
-Review comments should be specific and actionable. Prefer explaining the engineering
-tradeoff rather than leaving purely stylistic objections unless they violate the
-style guide.
+```markdown
+## Review Scorecard
+- Correctness: PASS | WARN | FAIL
+- Concurrency: PASS | WARN | FAIL | N/A
+- SwiftUI & Performance: PASS | WARN | FAIL | N/A
+- Architecture & API Design: PASS | WARN | FAIL | N/A
+- Ownership & Memory: PASS | WARN | FAIL | N/A
+- Error Handling & Observability: PASS | WARN | FAIL | N/A
+- Testing & Tooling: PASS | WARN | FAIL | N/A
 
-## Severity Levels
+## Findings
+### [blocker|major|minor|nit] Short summary
 
-| Level      | Meaning                                                        |
-|------------|----------------------------------------------------------------|
-| **critical** | Will crash, corrupt data, cause a data race, or create a security hole |
-| **major**    | Incorrect behavior, significant performance issue, or API misuse that will bite users |
-| **minor**    | Style violation, suboptimal pattern, or maintainability concern |
-| **nit**      | Cosmetic preference or trivial improvement                     |
+**File:** `path/to/File.swift:line`
+**Why it matters:** Concrete risk and user impact.
+**Fix:** Concrete code or design change.
+**Playbook:** One label from `references/remediation-playbooks.md` when a reusable fix
+path applies.
 
-## Review Flow
+## Remediation Plan
+- Quick wins: immediate, low-risk edits
+- Structural fixes: larger design changes
+- Tests to add: behavior, concurrency, or regression coverage
 
-1. **Context** — Identify the Swift version, platform targets, frameworks in use,
-   and any build/CI configuration present. Determine the review scope (full review,
-   concurrency-focused, style-only, etc.) to decide which references to load.
-2. **Correctness & Concurrency** — Check for data races, incorrect isolation,
-   Sendable violations, unsafe unstructured tasks, missing cancellation handling.
-   Read `references/review-checklist.md` §Correctness and §Concurrency when the
-   review involves concurrency, shared state, or actor isolation.
-3. **API Design & Naming** — Evaluate naming clarity, argument labels, access control,
-   protocol design, code organization. Read `references/swift-style-guide.md` when
-   the review covers naming, API design, or code organization.
-4. **Ownership & Memory** — Review capture lists, retain cycles, value vs. reference
-   semantics choices, IBOutlet conventions.
-   Read `references/review-checklist.md` §Ownership when closures, delegates, or
-   reference types are involved.
-5. **Error Handling & Observability** — Check throwing patterns, Result usage, logging,
-   diagnostics, precondition/fatalError usage.
-   Read `references/review-checklist.md` §Error Handling when the code uses throws,
-   Result, or catch blocks.
-6. **Code Organization & Style** — Check spacing, formatting, comments, imports,
-   extension structure, unused code removal.
-   Read `references/swift-style-guide.md` (if not already loaded) and
-   `references/review-checklist.md` §Code Organization, §Spacing, §Comments, §Imports
-   when style or structural issues are in scope.
-7. **Testing & Maintainability** — Evaluate test coverage strategy, testability of
-   the design, test pyramid, documentation quality.
-   Read `references/review-checklist.md` §Tests when test files are present or
-   test coverage is requested.
-8. **Tooling & CI** — Verify formatter and linter configuration, git commit standards.
-   Read `references/tooling.md` only when the user asks about CI setup, formatter
-   config, or linter rules. Use the scripts in `scripts/` only when the user
-   explicitly requests automated formatting or linting.
-9. **Self-check** — After completing findings, re-read files with critical or major
-   findings to verify that suggested fixes are correct and do not introduce new issues.
-
-## Output Format
-
-For each finding, include:
-
-```
-### [severity] Short summary
-
-**File:** `path/to/File.swift:lineNumber`
-**Issue:** What is wrong and why it matters.
-**Fix:** Concrete suggestion or code change.
+## Overall Verdict
+1-3 sentences on readiness, highest-risk area, and next step.
 ```
 
-Group findings by severity (critical first). End with a brief summary of overall
-code health and top recommendations.
+If a track is not relevant, mark it `N/A`. If there are no findings in a relevant
+track, leave the track as `PASS` and say so briefly in the verdict.
 
-## Git Commit Standards
+## Reference Map
 
-When reviewing commits or advising on commit structure:
-
-- Preferred format: `<type>(<scope>): <summary>`
-- Types: `feat`, `fix`, `refactor`, `perf`, `test`, `docs`, `chore`, `build`, `ci`
-- Commits should be small enough to review and large enough to preserve intent
-- Do not force-push shared branches without explicit team agreement
+- `references/review-routing.md` — decision tree, track selection, and scorecard rules
+- `references/review-checklist.md` — deep checklist for correctness, concurrency,
+  architecture, tests, and review hygiene
+- `references/swiftui-review.md` — SwiftUI state ownership and lightweight performance
+  heuristics
+- `references/swift-style-guide.md` — naming, organization, and style criteria
+- `references/remediation-playbooks.md` — patch-ready fix patterns for common findings
+- `references/tooling.md` — formatter, linter, and CI guidance
+- `references/example-findings.md` — example scorecard and finding layout
 
 ## Tooling Scripts
 
-The `scripts/` directory provides helper scripts for automated checks:
+Use the scripts in `scripts/` only when the user explicitly asks for formatting,
+linting, or automated cleanup:
 
-- `check_prereqs.sh` — Verify swift-format and SwiftLint are available
-- `format_swift.sh` — Run the official Swift formatter
-- `lint_swift.sh` — Run SwiftLint in strict mode
-- `fix_and_lint.sh` — Format, auto-fix, then lint (use only when user requests fixes)
+- `scripts/check_prereqs.sh` — verify `swift format` and `swiftlint`
+- `scripts/format_swift.sh` — run the Swift formatter
+- `scripts/lint_swift.sh` — run SwiftLint in strict mode
+- `scripts/fix_and_lint.sh` — format, auto-fix, then lint
 
-Run `check_prereqs.sh` before any other script. Only run tooling scripts when the user
-explicitly asks for formatting or linting — do not run them during a normal code review.
-
-## References
-
-- `references/review-checklist.md` — Structured review checklist
-- `references/swift-style-guide.md` — Swift 6 style, naming, and formatting criteria
-- `references/tooling.md` — Formatter and linter setup
-- `references/example-findings.md` — Example review output
+Run `scripts/check_prereqs.sh` before any other script. Do not run formatting or
+linting during a normal review unless the user asked for it.

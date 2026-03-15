@@ -1,132 +1,59 @@
-# Example Review Findings
+# Example Review Output
 
-These examples demonstrate the expected output format for review findings.
+Use this file to mirror the expected structure and tone of the final review.
 
----
+## Review Scorecard
 
-### [critical] Data race on shared mutable dictionary
+- Correctness: FAIL
+- Concurrency: FAIL
+- SwiftUI & Performance: WARN
+- Architecture & API Design: PASS
+- Ownership & Memory: PASS
+- Error Handling & Observability: WARN
+- Testing & Tooling: WARN
+
+## Findings
+
+### [blocker] Shared cache is mutated from unstructured tasks
 
 **File:** `Services/CacheManager.swift:47`
-**Issue:** `cache` is a `var [String: Data]` dictionary accessed from multiple
-`Task {}` blocks without synchronization. This causes undefined behavior under
-Swift 6 strict concurrency.
-**Fix:** Convert `CacheManager` to an `actor`, or protect `cache` with a `Mutex`.
+**Why it matters:** `cache` is written from multiple `Task {}` blocks without an
+synchronization boundary. Under Swift 6 strict concurrency this is a real data race and
+can corrupt state or crash unpredictably.
+**Fix:** Move the cache behind an `actor`, or guard the mutation surface with a `Mutex`
+and a narrow API.
+**Playbook:** `actor isolation`
 
-```swift
-// Before
-class CacheManager {
-    var cache: [String: Data] = [:]
+### [major] Unstable list identity triggers duplicate fetches
 
-    func store(_ data: Data, for key: String) {
-        cache[key] = data  // data race
-    }
-}
+**File:** `Features/Inbox/InboxView.swift:63`
+**Why it matters:** `ForEach(messages.indices, id: \.self)` couples row identity to list
+position. Inserts or deletes will invalidate the wrong rows, which can re-run `.task`
+work and write stale results into the UI.
+**Fix:** Iterate over stable `Message.ID` values and move async row loading to a
+view-model method keyed by that stable identity.
+**Playbook:** `identity stability`
 
-// After
-actor CacheManager {
-    private var cache: [String: Data] = [:]
-
-    func store(_ data: Data, for key: String) {
-        cache[key] = data  // actor-isolated, safe
-    }
-}
-```
-
----
-
-### [major] Retain cycle in closure capture
-
-**File:** `ViewModels/ProfileViewModel.swift:82`
-**Issue:** `self` is captured strongly in an escaping closure passed to
-`NetworkClient.fetch`. If the network request outlives the view model,
-this creates a retain cycle.
-**Fix:** Capture `[weak self]` and guard.
-
-```swift
-// Before
-networkClient.fetch(endpoint) { result in
-    self.handleResult(result)
-}
-
-// After
-networkClient.fetch(endpoint) { [weak self] result in
-    guard let self else { return }
-    self.handleResult(result)
-}
-```
-
----
-
-### [major] Force-unwrap in production code path
-
-**File:** `Utilities/DateParser.swift:23`
-**Issue:** `DateFormatter().date(from: input)!` will crash if the input
-string does not match the expected format. User input is not validated
-before reaching this point.
-**Fix:** Use optional binding and throw a descriptive error.
-
-```swift
-// Before
-let date = formatter.date(from: input)!
-
-// After
-guard let date = formatter.date(from: input) else {
-    throw DateParsingError.invalidFormat(input)
-}
-```
-
----
-
-### [minor] Over-broad MainActor annotation
-
-**File:** `Services/AnalyticsService.swift:1`
-**Issue:** The entire `AnalyticsService` class is annotated `@MainActor`,
-but it only performs network calls and data formatting — no UI work.
-This forces all callers onto the main actor unnecessarily.
-**Fix:** Remove `@MainActor` from the class. If specific methods need
-main-actor isolation, annotate those individually.
-
----
-
-### [minor] Bare catch block swallows error
+### [minor] Bare catch block hides backend failures
 
 **File:** `Networking/APIClient.swift:95`
-**Issue:** `catch {}` silently discards the error. Callers have no way to
-know the request failed, and debugging production issues becomes difficult.
-**Fix:** At minimum, log the error. Prefer rethrowing or returning a
-`Result.failure`.
+**Why it matters:** `catch {}` discards the original failure, making retry behavior and
+production debugging guesswork.
+**Fix:** Throw a typed error or log the original error before mapping it to a user-facing
+failure.
+**Playbook:** `typed errors`
 
-```swift
-// Before
-do {
-    let data = try await session.data(for: request)
-} catch {}
+## Remediation Plan
 
-// After
-do {
-    let data = try await session.data(for: request)
-} catch {
-    Logger.network.error("Request failed: \(error)")
-    throw error
-}
-```
+- Quick wins: replace index-based identity, remove the bare catch, and add a concurrent
+  write regression test.
+- Structural fixes: isolate cache mutation behind an actor and move list-side async work
+  into a model that owns cancellation.
+- Tests to add: a concurrent store/read stress test and a list update test that inserts
+  and deletes rows while async work is in flight.
 
----
+## Overall Verdict
 
-### [nit] Import order
-
-**File:** `Views/SettingsView.swift:1`
-**Issue:** `import SwiftUI` appears after `import MyAppKit`. System
-frameworks should be imported first.
-**Fix:** Sort imports with system frameworks first, then project modules.
-
-```swift
-// Before
-import MyAppKit
-import SwiftUI
-
-// After
-import SwiftUI
-
-import MyAppKit
-```
+Not ready to merge as-is. The highest-risk issue is the shared mutable cache because it
+can fail nondeterministically in production. Fix the isolation boundary first, then
+stabilize list identity and add regression coverage around both behaviors.

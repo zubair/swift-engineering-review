@@ -1,16 +1,6 @@
-name: Swift Engineering Review
-description: >
-  Use this skill to review Swift code, pull requests, or architecture decisions against
-  modern Swift 6 engineering standards — even when the user asks generically to "review
-  my code" or "check this PR" and the target is a Swift project. Covers correctness,
-  concurrency safety (Sendable, actor isolation, data races), API design, memory
-  management, error handling, testing, and style enforcement with swift-format and
-  SwiftLint. Also trigger when the user asks about thread safety, data races, or Swift
-  concurrency correctness in their codebase. This skill does not cover accessibility
-  auditing, performance profiling, or migration between Swift versions.
-
 interface:
   display_name: "Swift Engineering Review"
-
+  short_description: "Operational Swift review workflows"
+  default_prompt: "Use $swift-engineering-review to audit this Swift change with a scorecard, prioritized findings, and concrete fix playbooks."
 policy:
   allow_implicit_invocation: true
